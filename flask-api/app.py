@@ -310,5 +310,26 @@ def default_guidance(raw_label: str) -> dict[str, object]:
 app = create_app()
 
 
+import os
+import logging
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=False)
+    # Configure logging
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Get configuration from environment
+    host = os.getenv("FLASK_HOST", "0.0.0.0")
+    port = int(os.getenv("FLASK_PORT", 5001))
+    debug = os.getenv("FLASK_DEBUG", "False").lower() == "true"
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting Agri-InvestAI Flask API on {host}:{port}")
+    
+    try:
+        app.run(host=host, port=port, debug=debug, use_reloader=debug)
+    except OSError as e:
+        logger.error(f"Failed to start server: {e}")
+        raise
