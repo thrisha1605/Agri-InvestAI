@@ -1,0 +1,33 @@
+{
+  "accuracy": 0.993182,
+  "precision_weighted": 0.993506,
+  "recall_weighted": 0.993182,
+  "average_prediction_confidence": 0.955667,
+  "dataset": "C:\\Users\\AEE KODIGENAHALLI\\Documents\\thrisha(project)\\agri-invest\\datasets\\crop-recommendation\\Crop_recommendation.csv",
+  "test_size": 0.2,
+  "samples": 2200,
+  "classes": [
+    "apple",
+    "banana",
+    "blackgram",
+    "chickpea",
+    "coconut",
+    "coffee",
+    "cotton",
+    "grapes",
+    "jute",
+    "kidneybeans",
+    "lentil",
+    "maize",
+    "mango",
+    "mothbeans",
+    "mungbean",
+    "muskmelon",
+    "orange",
+    "papaya",
+    "pigeonpeas",
+    "pomegranate",
+    "rice",
+    "watermelon"
+  ]
+}

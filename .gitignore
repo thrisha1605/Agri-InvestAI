@@ -1,0 +1,18 @@
+# Node
+frontend/node_modules/
+
+# Java Maven
+backend-springboot/target/
+backend-springboot/.m2/
+
+# Python
+venv/
+venv*/
+.venv*
+__pycache__/
+
+# Logs
+*.log
+
+# IDE
+.vscode/

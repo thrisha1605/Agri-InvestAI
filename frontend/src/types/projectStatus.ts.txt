@@ -1,0 +1,10 @@
+export type ProjectStatus =
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "ACTIVE"
+  | "FUNDED"
+  | "IN_PROGRESS"
+  | "COMPLETION_REQUESTED"
+  | "COMPLETED"
+  | "REJECTED"
+  | "CANCELLED";

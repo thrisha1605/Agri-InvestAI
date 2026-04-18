@@ -1,0 +1,4 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BackButton } from "@/components/BackButton";
+
+export function AdminProfile(){ return <div className="min-h-screen bg-gray-50 py-8"><div className="container mx-auto px-4 max-w-4xl"><BackButton /><Card><CardHeader><CardTitle>Admin Profile</CardTitle></CardHeader><CardContent className="space-y-3"><p><strong>Email:</strong> thrishaanju2@gmail.com</p><p><strong>Phone:</strong> 8951441328</p><p>Admin can verify and modify farmers, investors and agri-partners, approve projects and manage requests.</p></CardContent></Card></div></div>}
