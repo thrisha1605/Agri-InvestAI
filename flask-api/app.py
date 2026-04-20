@@ -12,6 +12,9 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from PIL import Image
 
+@app.route('/')
+def home():
+    return app.send_static_file('index.html')
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = PROJECT_ROOT / "ai-models" / "artifacts"
