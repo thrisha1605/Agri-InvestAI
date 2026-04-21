@@ -1,4 +1,4 @@
-import { apiRequest, buildQuery } from "./api";
+import { ENABLE_LOCAL_FALLBACKS, apiRequest, buildQuery } from "./api";
 import { storage } from "./storage";
 
 const PARTNER_PROFILE_KEY = "agriinvest_partner_profiles_v1";
@@ -290,7 +290,10 @@ export async function persistPartnerProfile(profile: PartnerProfileRecord): Prom
     });
 
     return upsertPartnerProfileLocal(normalizeApiProfile(response, profile.userId));
-  } catch {
+  } catch (error) {
+    if (!ENABLE_LOCAL_FALLBACKS) {
+      throw error;
+    }
     return upsertPartnerProfileLocal(profile);
   }
 }

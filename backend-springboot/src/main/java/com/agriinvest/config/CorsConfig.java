@@ -1,5 +1,11 @@
 package com.agriinvest.config;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -11,10 +17,21 @@ import com.agriinvest.security.AuthTokenInterceptor;
 @Configuration
 public class CorsConfig {
 
-    private final AuthTokenInterceptor authTokenInterceptor;
+    private static final List<String> DEFAULT_ALLOWED_ORIGIN_PATTERNS = List.of(
+            "http://localhost:*",
+            "http://127.0.0.1:*",
+            "https://*.onrender.com"
+    );
 
-    public CorsConfig(AuthTokenInterceptor authTokenInterceptor) {
+    private final AuthTokenInterceptor authTokenInterceptor;
+    private final List<String> allowedOriginPatterns;
+
+    public CorsConfig(
+            AuthTokenInterceptor authTokenInterceptor,
+            @Value("${app.cors.allowed-origins:}") String configuredOrigins
+    ) {
         this.authTokenInterceptor = authTokenInterceptor;
+        this.allowedOriginPatterns = mergeAllowedOrigins(configuredOrigins);
     }
 
     @Bean
@@ -23,10 +40,7 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOrigins(
-                                "https://agri-invest-web.onrender.com",
-                                "https://agri-invest-ai-engine.onrender.com"
-                        )
+                        .allowedOriginPatterns(allowedOriginPatterns.toArray(String[]::new))
                         .allowCredentials(true)
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
@@ -39,5 +53,29 @@ public class CorsConfig {
                         .addPathPatterns("/api/**");
             }
         };
+    }
+
+    private List<String> mergeAllowedOrigins(String configuredOrigins) {
+        Set<String> merged = new LinkedHashSet<>(DEFAULT_ALLOWED_ORIGIN_PATTERNS);
+        for (String origin : splitOrigins(configuredOrigins)) {
+            merged.add(origin);
+        }
+        return new ArrayList<>(merged);
+    }
+
+    private List<String> splitOrigins(String configuredOrigins) {
+        if (configuredOrigins == null || configuredOrigins.isBlank()) {
+            return List.of();
+        }
+
+        String[] parts = configuredOrigins.split(",");
+        List<String> origins = new ArrayList<>();
+        for (String part : parts) {
+            String normalized = part == null ? "" : part.trim();
+            if (!normalized.isBlank()) {
+                origins.add(normalized);
+            }
+        }
+        return origins;
     }
 }

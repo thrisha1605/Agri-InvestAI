@@ -46,10 +46,11 @@ export function Login() {
   const showOtpOnScreen = (response: { otpId: string; otp?: string; message: string }) => {
     setOtpId(response.otpId);
     setOtpSent(true);
+    setDemoOtp(response.otp || '');
+    setOtp(response.otp || '');
+    setShowOtpPopup(Boolean(response.otp));
+
     if (response.otp) {
-      setDemoOtp(response.otp);
-      setOtp(response.otp);
-      setShowOtpPopup(true);
       toast.success('OTP sent and shown on screen.');
       return;
     }
@@ -133,10 +134,12 @@ export function Login() {
               Use this OTP on the same screen to continue login.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
-            <p className="text-sm text-gray-600 mb-2">Your OTP</p>
-            <p className="text-3xl font-bold tracking-[0.35em] text-green-700">{demoOtp}</p>
-          </div>
+          {demoOtp && (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
+              <p className="text-sm text-gray-600 mb-2">Your OTP</p>
+              <p className="text-3xl font-bold tracking-[0.35em] text-green-700">{demoOtp}</p>
+            </div>
+          )}
           <Button onClick={() => setShowOtpPopup(false)} className="w-full">
             Continue
           </Button>
@@ -183,10 +186,12 @@ export function Login() {
             </form>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center">
-                <p className="text-sm text-gray-600">Popup closed? Your OTP is still here.</p>
-                <p className="mt-1 text-2xl font-bold tracking-[0.3em] text-green-700">{demoOtp}</p>
-              </div>
+              {demoOtp && (
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center">
+                  <p className="text-sm text-gray-600">Popup closed? Your OTP is still here.</p>
+                  <p className="mt-1 text-2xl font-bold tracking-[0.3em] text-green-700">{demoOtp}</p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="otp">Enter OTP</Label>

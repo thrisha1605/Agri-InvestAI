@@ -13,8 +13,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.agriinvest.model.OtpSession;
+import com.agriinvest.model.PartnerProfile;
 import com.agriinvest.model.User;
 import com.agriinvest.repository.OtpSessionRepository;
+import com.agriinvest.repository.PartnerProfileRepository;
 import com.agriinvest.repository.UserRepository;
 import com.agriinvest.repository.WalletAccountRepository;
 import com.agriinvest.security.AuthTokenService;
@@ -33,17 +35,20 @@ public class AuthService {
     private final OtpSessionRepository otpSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final WalletAccountRepository walletAccountRepository;
+    private final PartnerProfileRepository partnerProfileRepository;
     private final AuthTokenService authTokenService;
 
     public AuthService(UserRepository userRepository,
                        OtpSessionRepository otpSessionRepository,
                        PasswordEncoder passwordEncoder,
                        WalletAccountRepository walletAccountRepository,
+                       PartnerProfileRepository partnerProfileRepository,
                        AuthTokenService authTokenService) {
         this.userRepository = userRepository;
         this.otpSessionRepository = otpSessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.walletAccountRepository = walletAccountRepository;
+        this.partnerProfileRepository = partnerProfileRepository;
         this.authTokenService = authTokenService;
     }
 
@@ -103,6 +108,7 @@ public class AuthService {
         );
 
         userRepository.save(user);
+        initializePartnerProfileIfNeeded(user);
         otpSessionRepository.deleteById(otpSession.getId());
 
         return authSuccess("Registration successful", user);
@@ -207,6 +213,35 @@ public class AuthService {
 
     private String safeString(String value) {
         return value == null ? "" : value;
+    }
+
+    private void initializePartnerProfileIfNeeded(User user) {
+        if (!"AGRI_PARTNER".equalsIgnoreCase(user.getRole())) {
+            return;
+        }
+
+        partnerProfileRepository.findById(user.getId()).orElseGet(() -> {
+            PartnerProfile profile = new PartnerProfile();
+            profile.setUserId(user.getId());
+            profile.setHeadline("");
+            profile.setBio("");
+            profile.setExperienceYears(0);
+            profile.setSkills(java.util.List.of());
+            profile.setDistricts(java.util.List.of());
+            profile.setAadhaarNumber("");
+            profile.setAadhaarFileName("");
+            profile.setCertificateFileNames(java.util.List.of());
+            profile.setAdditionalDocumentNames(java.util.List.of());
+            profile.setBankProofFileName("");
+            profile.setUpiId("");
+            profile.setPaytmNumber("");
+            profile.setPhotoDataUrl("");
+            profile.setAdminRemarks("");
+            profile.setCompletionPercent(0);
+            profile.setReadyForProjects(false);
+            profile.setUpdatedAt(Instant.now());
+            return partnerProfileRepository.save(profile);
+        });
     }
 
     private String normalizeTarget(String target) {
