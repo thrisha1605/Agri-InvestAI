@@ -23,13 +23,11 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOriginPatterns(
-                                "http://localhost:*",
-                                "http://127.0.0.1:*",
-                                "http://192.168.*:*",
-                                "http://10.*:*"
+                        .allowedOrigins(
+                                "https://agri-invest-web.onrender.com",
+                                "https://agri-invest-ai-engine.onrender.com"
                         )
-                        .allowCredentials(false)
+                        .allowCredentials(true)
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .maxAge(3600);
