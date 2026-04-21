@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { authService } from '@/lib/auth';
-import { backendAuthService } from '@/lib/backendAuth';
 import { UserRole } from '@/types';
 import { Sprout } from 'lucide-react';
 import { bootstrapSessionData } from '@/lib/sessionBootstrap';
@@ -20,7 +19,7 @@ const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   phone: z.string().regex(/^[6-9]\d{9}$/, 'Invalid Indian mobile number'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(6, 'Min 6 characters'),
   role: z.enum(['FARMER', 'INVESTOR', 'AGRI_PARTNER']),
 });
 
@@ -32,95 +31,78 @@ export function Register() {
   const [otpInput, setOtpInput] = useState('');
   const [formData, setFormData] = useState<RegisterForm | null>(null);
   const [demoOtp, setDemoOtp] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: { role: 'FARMER' }
   });
 
-  const generateAndShowOtp = () => {
-    // This generates a 6-digit number to show on your screen
+  const onSubmit = async (data: RegisterForm) => {
+    setFormData(data);
     const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
     setDemoOtp(newOtp);
     setOtpSent(true);
-    toast.success('OTP Generated for Demo');
-  };
-
-  const onSubmit = async (data: RegisterForm) => {
-    setSubmitting(true);
-    setFormData(data);
-
-    try {
-      // We try the backend, but if it fails (like your current MongoDB error), 
-      // we jump to the 'catch' block to show the OTP on screen.
-      await backendAuthService.requestOtp(data.phone);
-      toast.success('OTP requested from server');
-      setOtpSent(true);
-    } catch (error) {
-      console.log("Backend offline, using Demo Mode");
-      generateAndShowOtp();
-    } finally {
-      setSubmitting(false);
-    }
+    toast.success("OTP Generated!");
   };
 
   const handleVerifyOTP = async () => {
-    if (!formData) return;
-    setSubmitting(true);
-
-    try {
-      // For Demo: If the user types the OTP shown in the green box, let them in!
-      if (otpInput === demoOtp || otpInput === "123456") {
-        const mockUser = {
-          id: 'demo_' + Date.now(),
-          name: formData.name,
-          email: formData.email,
-          role: formData.role as UserRole,
-          phone: formData.phone
-        };
-        userService.upsertUser(mockUser);
-        authService.login(mockUser, 'demo_token');
-        await bootstrapSessionData();
-        toast.success('Registration successful!');
-        navigate(formData.role === 'FARMER' ? '/farmer/dashboard' : '/investor/dashboard');
-      } else {
-        toast.error('Invalid OTP. Please check the code in the green box.');
-      }
-    } catch (error) {
-      toast.error('Verification failed');
-    } finally {
-      setSubmitting(false);
+    if (!formData || otpInput !== demoOtp) {
+      toast.error("Invalid OTP code");
+      return;
     }
+    
+    const mockUser = {
+      id: "user_" + Date.now(),
+      name: formData.name,
+      email: formData.email,
+      role: formData.role as UserRole,
+      phone: formData.phone
+    };
+
+    userService.upsertUser(mockUser);
+    authService.login(mockUser, "demo_token");
+    await bootstrapSessionData();
+    toast.success('Welcome to AgriInvest!');
+    navigate(formData.role === 'FARMER' ? '/farmer/dashboard' : '/investor/dashboard');
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-white flex items-center justify-center py-12 px-4">
-      <Card className="w-full max-w-md shadow-lg border-green-100">
-        <CardHeader className="text-center space-y-2">
-          <div className="flex justify-center mb-2">
-            <div className="h-12 w-12 bg-green-600 rounded-full flex items-center justify-center">
-              <Sprout className="h-6 w-6 text-white" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl font-bold text-gray-800">Create Account</CardTitle>
-          <CardDescription>
-            {!otpSent ? 'Join the AgriInvest AI platform' : 'Enter the code displayed below'}
-          </CardDescription>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <Sprout className="h-10 w-10 text-green-600 mx-auto mb-2" />
+          <CardTitle>Create Account</CardTitle>
+          <CardDescription>{!otpSent ? "Join AgriInvest" : "Verify your code"}</CardDescription>
         </CardHeader>
         <CardContent>
           {!otpSent ? (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" {...register('name')} placeholder="Enter your name" />
-                {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+              <Input {...register('name')} placeholder="Full Name" />
+              {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+              <Input {...register('email')} placeholder="Email" />
+              <Input {...register('phone')} placeholder="Mobile Number" />
+              <Input {...register('password')} type="password" placeholder="Password" />
+              <Select onValueChange={(v) => setValue('role', v as any)}>
+                <SelectTrigger><SelectValue placeholder="Select Role" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FARMER">Farmer</SelectItem>
+                  <SelectItem value="INVESTOR">Investor</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button type="submit" className="w-full bg-green-600">Send OTP</Button>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <div className="p-4 bg-green-100 border border-green-300 rounded text-center">
+                <p className="text-sm text-green-800">YOUR OTP IS:</p>
+                <p className="text-4xl font-bold text-green-700">{demoOtp}</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" {...register('email')} placeholder="name@example.com" />
-                {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input id="phone" {...register('phone')} placeholder="9876543
+              <Input value={otpInput} onChange={(e) => setOtpInput(e.target.value)} placeholder="Enter code" />
+              <Button onClick={handleVerifyOTP} className="w-full bg-green-600">Verify & Login</Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
