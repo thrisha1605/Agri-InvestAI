@@ -143,6 +143,11 @@ def create_app() -> Flask:
     app = Flask(__name__)
     CORS(app)
 
+    # MOVED HOME ROUTE INSIDE HERE
+    @app.route('/')
+    def home():
+        return "AI Engine is Running"
+
     @app.get("/health")
     def health():
         return jsonify(
@@ -307,11 +312,8 @@ def default_guidance(raw_label: str) -> dict[str, object]:
     }
 
 
+# CREATE THE APP INSTANCE
 app = create_app()
-
-@app.route('/')
-def home():
-    return "AI Engine is Running"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)
