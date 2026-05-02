@@ -54,6 +54,7 @@ export const backendAuthService = {
       url: '/api/auth/request-otp',
       method: 'POST',
       data: { target },
+      withAuth: false,
     });
   },
 
@@ -62,6 +63,7 @@ export const backendAuthService = {
       url: '/api/auth/verify-otp',
       method: 'POST',
       data: { otpId, otp },
+      withAuth: false,
     });
   },
 
@@ -70,6 +72,7 @@ export const backendAuthService = {
       url: '/api/auth/register',
       method: 'POST',
       data: payload,
+      withAuth: false,
     });
 
     return {
@@ -84,6 +87,7 @@ export const backendAuthService = {
       url: '/api/auth/login',
       method: 'POST',
       data: payload,
+      withAuth: false,
     });
 
     return {

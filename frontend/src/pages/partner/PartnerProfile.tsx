@@ -21,9 +21,9 @@ function readFileAsDataUrl(file: File) {
 
 export function PartnerProfile() {
   const user = authService.getCurrentUser();
-  if (!user) return null;
+  const partnerId = user?.id || "";
 
-  const [profileSnapshot, setProfileSnapshot] = useState(() => getPartnerProfile(user.id));
+  const [profileSnapshot, setProfileSnapshot] = useState(() => getPartnerProfile(partnerId));
   const [headline, setHeadline] = useState(profileSnapshot.headline);
   const [bio, setBio] = useState(profileSnapshot.bio);
   const [experienceYears, setExperienceYears] = useState(String(profileSnapshot.experienceYears || 0));
@@ -39,12 +39,16 @@ export function PartnerProfile() {
   const [photoDataUrl, setPhotoDataUrl] = useState(profileSnapshot.photoDataUrl);
   const [saving, setSaving] = useState(false);
 
-  const requests = getPartnerRequestsForPartner(user.id);
+  const requests = partnerId ? getPartnerRequestsForPartner(partnerId) : [];
 
   useEffect(() => {
+    if (!partnerId) {
+      return;
+    }
+
     let mounted = true;
 
-    void fetchPartnerProfile(user.id).then((profile) => {
+    void fetchPartnerProfile(partnerId).then((profile) => {
       if (!mounted) return;
       setProfileSnapshot(profile);
       setHeadline(profile.headline);
@@ -65,7 +69,9 @@ export function PartnerProfile() {
     return () => {
       mounted = false;
     };
-  }, [user.id]);
+  }, [partnerId]);
+
+  if (!user) return null;
 
   const handlePhotoChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -102,7 +108,7 @@ export function PartnerProfile() {
     try {
       const profile = await persistPartnerProfile({
         ...profileSnapshot,
-        userId: user.id,
+        userId: partnerId,
         headline,
         bio,
         experienceYears: Number(experienceYears || 0),

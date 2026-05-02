@@ -102,6 +102,8 @@ export async function recommendCrop(
     method: "POST",
     url: "/api/ai/crop",
     data: payload,
+    timeout: 30000,
+    withAuth: false,
   });
 }
 
@@ -112,6 +114,8 @@ export async function analyzeCrop(
     method: "POST",
     url: "/api/ai/crop-analysis",
     data: payload,
+    timeout: 30000,
+    withAuth: false,
   });
 }
 
@@ -125,9 +129,11 @@ export async function detectDisease(
     method: "POST",
     url: "/api/ai/disease",
     data: formData,
+    timeout: 60000,
     headers: {
       "Content-Type": "multipart/form-data",
     },
+    withAuth: false,
   });
 }
 
@@ -136,6 +142,8 @@ export async function scoreEsg(payload: EsgFormInput): Promise<EsgSummary> {
     method: "POST",
     url: "/api/ai/esg-score",
     data: payload,
+    timeout: 30000,
+    withAuth: false,
   });
 }
 
@@ -144,6 +152,8 @@ export async function fetchProjectInsights(payload: Record<string, unknown>) {
     method: "POST",
     url: "/api/ai/project-insights",
     data: payload,
+    timeout: 30000,
+    withAuth: false,
   });
 }
 

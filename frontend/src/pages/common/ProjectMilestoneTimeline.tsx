@@ -31,13 +31,12 @@ function matchesMilestone(update: ProjectProgressUpdate, milestone: MilestoneDef
 }
 
 export function ProjectMilestoneTimeline() {
-
   const { id } = useParams();
-  const [updates, setUpdates] = useState<ProjectProgressUpdate[]>(() => listProgress(id || ""));
+  const projectId = id || "";
+  const [updates, setUpdates] = useState<ProjectProgressUpdate[]>(() => listProgress(projectId));
 
   useEffect(() => {
     let active = true;
-    const projectId = id || "";
 
     setUpdates(listProgress(projectId));
     if (!projectId) {
@@ -57,9 +56,7 @@ export function ProjectMilestoneTimeline() {
     return () => {
       active = false;
     };
-  }, [id]);
-
-  if (!id) return null;
+  }, [projectId]);
 
   const milestoneCards = useMemo(
     () =>
@@ -69,6 +66,8 @@ export function ProjectMilestoneTimeline() {
       })),
     [updates]
   );
+
+  if (!id) return null;
 
   return (
     <div className="p-6 space-y-6">

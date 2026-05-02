@@ -2,7 +2,13 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authService } from '@/lib/auth';
-import { streamFriendlyAssistant, type AIChatTurn } from '@/lib/liveChat';
+import { isBackendSessionToken } from '@/lib/api';
+import {
+  clearAssistantHistory,
+  fetchAssistantHistory,
+  streamFriendlyAssistant,
+  type AIChatTurn,
+} from '@/lib/liveChat';
 import {
   ArrowLeft,
   Image as ImageIcon,
@@ -92,6 +98,10 @@ function formatTime(date: Date) {
   });
 }
 
+function createWelcomeState(text: string) {
+  return [createWelcomeMessage(text)];
+}
+
 export function AIChat() {
   const user = authService.getCurrentUser();
 
@@ -106,6 +116,7 @@ export function AIChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const role = user?.role || 'FARMER';
+  const hasBackendSession = isBackendSessionToken(authService.getToken());
   const quickPrompts = QUICK_PROMPTS[role] || QUICK_PROMPTS.FARMER;
   const RoleIcon = ROLE_ICONS[role] || Bot;
 
@@ -140,29 +151,70 @@ export function AIChat() {
       return;
     }
 
-    const savedMessages = localStorage.getItem(storageKey);
-    if (!savedMessages) {
-      setMessages([createWelcomeMessage(welcomeMessage)]);
+    const restoreLocalMessages = () => {
+      const savedMessages = localStorage.getItem(storageKey);
+      if (!savedMessages) {
+        setMessages(createWelcomeState(welcomeMessage));
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(savedMessages) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
+        const restored = parsed
+          .filter((item) => item && typeof item.text === 'string')
+          .map((item) => ({
+            ...item,
+            timestamp: new Date(item.timestamp),
+          }));
+
+        setMessages(restored.length > 0 ? restored : createWelcomeState(welcomeMessage));
+      } catch {
+        setMessages(createWelcomeState(welcomeMessage));
+      }
+    };
+
+    if (!hasBackendSession || !user?.id) {
+      restoreLocalMessages();
       return;
     }
 
-    try {
-      const parsed = JSON.parse(savedMessages) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
-      const restored = parsed
-        .filter((item) => item && typeof item.text === 'string')
-        .map((item) => ({
-          ...item,
-          timestamp: new Date(item.timestamp),
-        }));
+    let active = true;
+    setMessages(createWelcomeState(welcomeMessage));
 
-      setMessages(restored.length > 0 ? restored : [createWelcomeMessage(welcomeMessage)]);
-    } catch {
-      setMessages([createWelcomeMessage(welcomeMessage)]);
-    }
-  }, [storageKey, welcomeMessage]);
+    void fetchAssistantHistory({ role, userId: user.id })
+      .then((history) => {
+        if (!active) {
+          return;
+        }
+
+        if (!history.length) {
+          setMessages(createWelcomeState(welcomeMessage));
+          return;
+        }
+
+        setMessages(
+          history.map((item, index) => ({
+            id: `history-${index}`,
+            text: item.text,
+            sender: item.sender,
+            image: item.image,
+            timestamp: item.timestamp ? new Date(item.timestamp) : new Date(),
+          })),
+        );
+      })
+      .catch(() => {
+        if (active) {
+          restoreLocalMessages();
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hasBackendSession, role, storageKey, user?.id, welcomeMessage]);
 
   useEffect(() => {
-    if (!storageKey) {
+    if (!storageKey || hasBackendSession) {
       return;
     }
 
@@ -170,7 +222,7 @@ export function AIChat() {
       (message) => message.text.trim() || message.sender === 'user' || message.image,
     );
     localStorage.setItem(storageKey, JSON.stringify(persistableMessages));
-  }, [messages, storageKey]);
+  }, [hasBackendSession, messages, storageKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -208,12 +260,27 @@ export function AIChat() {
     return 'Ask me anything. If I need more details, I will ask.';
   };
 
+  const getFailureReply = (question: string, image: string | null, error?: unknown) => {
+    if (error instanceof Error && error.message.trim()) {
+      return error.message.trim();
+    }
+
+    if (image) {
+      return 'I could not analyze that image just now. If the Flask disease AI is running, try the image again, or tell me the crop and visible symptoms here and I will help.';
+    }
+
+    return getFallbackReply(question);
+  };
+
   const resetChat = () => {
     if (storageKey) {
       localStorage.removeItem(storageKey);
     }
+    if (hasBackendSession && user?.id) {
+      void clearAssistantHistory({ role, userId: user.id }).catch(() => undefined);
+    }
 
-    setMessages([createWelcomeMessage(welcomeMessage)]);
+    setMessages(createWelcomeState(welcomeMessage));
     setInput('');
     setSelectedImage(null);
     setStreamingMessageId(null);
@@ -294,9 +361,7 @@ export function AIChat() {
       );
 
       if (!streamedReply.trim()) {
-        const fallbackText = currentImage
-          ? 'I received your image. Image-based AI analysis is not available right now, but you can still use the disease analysis and project upload sections.'
-          : getFallbackReply(text);
+        const fallbackText = getFailureReply(text, currentImage);
 
         setMessages((prev) =>
           prev.map((message) =>
@@ -307,9 +372,7 @@ export function AIChat() {
     } catch (error) {
       console.error('AI chat error:', error);
 
-      const fallbackText = currentImage
-        ? 'I received your image. Image-based AI analysis is not available right now, but you can still use the disease analysis and project upload sections.'
-        : getFallbackReply(text);
+      const fallbackText = getFailureReply(text, currentImage, error);
 
       setMessages((prev) =>
         prev.map((message) =>

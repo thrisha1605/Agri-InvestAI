@@ -3,6 +3,8 @@ package com.agriinvest.controller;
 import java.util.Map;
 
 import org.bson.Document; // Required for generic saving
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.core.MongoTemplate; // Best for saving Maps/Documents
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +21,8 @@ import com.agriinvest.service.ProjectInsightService;
 @RequestMapping("/api/ai")
 public class AiAnalysisController {
 
+    private static final Logger logger = LoggerFactory.getLogger(AiAnalysisController.class);
+
     private final AiIntegrationService aiIntegrationService;
     private final ProjectInsightService projectInsightService;
     private final MongoTemplate mongoTemplate; // Injected to handle database saves
@@ -34,65 +38,53 @@ public class AiAnalysisController {
     @PostMapping("/crop")
     public Map<String, Object> recommendCrop(@RequestBody Map<String, Object> payload) {
         Map<String, Object> response = aiIntegrationService.recommendCrop(payload);
-        
-        // SAVE TO MONGODB: This creates the database and collection automatically
-        Document doc = new Document(response);
-        doc.append("type", "crop_recommendation");
-        doc.append("timestamp", System.currentTimeMillis());
-        mongoTemplate.save(doc, "predictions"); 
-        
-        return response;
-    }
-@PostMapping(value = "/disease", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Map<String, Object> diseasePrediction(@RequestParam("image") MultipartFile image) {
-        // Change @RequestPart to @RequestParam above
-        Map<String, Object> response = aiIntegrationService.predictDisease(image);
-        
-        // SAVE TO MONGODB
-        Document doc = new Document(response);
-        doc.append("type", "disease_detection");
-        doc.append("timestamp", System.currentTimeMillis());
-        mongoTemplate.save(doc, "predictions");
-        
+        persistPrediction("crop_recommendation", response, null);
         return response;
     }
 
-   @PostMapping("/crop-analysis")
-    public Map<String, Object> cropAnalysis(@RequestBody Map<String, Object> payload) {
-        Map<String, Object> response = projectInsightService.analyzeCrop(payload);
-        
-        // SAVE TO MONGODB
-        Document doc = new Document(response);
-        doc.append("type", "crop_analysis");
-        doc.append("input_payload", payload); // Optional: saves what the user sent too
-        doc.append("timestamp", System.currentTimeMillis());
-        mongoTemplate.save(doc, "predictions");
-        
+    @PostMapping(value = "/disease", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Map<String, Object> diseasePrediction(@RequestParam("image") MultipartFile image) {
+        Map<String, Object> response = aiIntegrationService.predictDisease(image);
+        persistPrediction("disease_detection", response, Map.of(
+                "filename", image.getOriginalFilename(),
+                "contentType", image.getContentType(),
+                "size", image.getSize()
+        ));
         return response;
     }
-@PostMapping("/esg-score")
+
+    @PostMapping("/crop-analysis")
+    public Map<String, Object> cropAnalysis(@RequestBody Map<String, Object> payload) {
+        Map<String, Object> response = projectInsightService.analyzeCrop(payload);
+        persistPrediction("crop_analysis", response, payload);
+        return response;
+    }
+
+    @PostMapping("/esg-score")
     public Map<String, Object> esgScore(@RequestBody Map<String, Object> payload) {
         Map<String, Object> response = projectInsightService.scoreEsg(payload);
-        
-        // SAVE TO MONGODB
-        Document doc = new Document(response);
-        doc.append("type", "esg_score");
-        doc.append("timestamp", System.currentTimeMillis());
-        mongoTemplate.save(doc, "predictions");
-        
+        persistPrediction("esg_score", response, payload);
         return response;
     }
 
     @PostMapping("/project-insights")
     public Map<String, Object> projectInsights(@RequestBody Map<String, Object> payload) {
         Map<String, Object> response = projectInsightService.buildProjectInsights(payload);
-        
-        // SAVE TO MONGODB
-        Document doc = new Document(response);
-        doc.append("type", "project_insights");
-        doc.append("timestamp", System.currentTimeMillis());
-        mongoTemplate.save(doc, "predictions");
-        
+        persistPrediction("project_insights", response, payload);
         return response;
+    }
+
+    private void persistPrediction(String type, Map<String, Object> response, Map<String, Object> inputPayload) {
+        try {
+            Document doc = new Document(response);
+            doc.append("type", type);
+            doc.append("timestamp", System.currentTimeMillis());
+            if (inputPayload != null && !inputPayload.isEmpty()) {
+                doc.append("input_payload", inputPayload);
+            }
+            mongoTemplate.save(doc, "predictions");
+        } catch (Exception exception) {
+            logger.warn("Skipping MongoDB save for {} because persistence is unavailable: {}", type, exception.getMessage());
+        }
     }
 }

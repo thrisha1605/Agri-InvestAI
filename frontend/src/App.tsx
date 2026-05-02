@@ -76,12 +76,24 @@ function ProtectedRoute({
 }
 
 function App() {
-  const [bootstrapping, setBootstrapping] = useState(true);
+  const shouldBootstrap = authService.isAuthenticated() && Boolean(authService.getCurrentUser());
+  const [bootstrapping, setBootstrapping] = useState(shouldBootstrap);
 
   useEffect(() => {
+    if (!shouldBootstrap) {
+      setBootstrapping(false);
+      return;
+    }
+
     let mounted = true;
+    const loaderDeadline = window.setTimeout(() => {
+      if (mounted) {
+        setBootstrapping(false);
+      }
+    }, 2500);
 
     void bootstrapSessionData().finally(() => {
+      window.clearTimeout(loaderDeadline);
       if (mounted) {
         setBootstrapping(false);
       }
@@ -89,8 +101,9 @@ function App() {
 
     return () => {
       mounted = false;
+      window.clearTimeout(loaderDeadline);
     };
-  }, []);
+  }, [shouldBootstrap]);
 
   if (bootstrapping) {
     return (

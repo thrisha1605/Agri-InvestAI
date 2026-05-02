@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
+import com.agriinvest.dto.AiChatRequest;
+
 @Service
 public class AiChatService {
 
@@ -93,9 +95,12 @@ public class AiChatService {
         this.aiIntegrationService = aiIntegrationService;
     }
 
-    public String getReply(String message, String role, String userId, String image) {
-        ConversationContext context = sessions.computeIfAbsent(sessionKey(userId, role), ignored -> new ConversationContext());
-        String text = message == null ? "" : message.trim();
+    public String getReply(AiChatRequest request) {
+        String role = request == null ? null : request.getRole();
+        String userId = request == null ? null : request.getUserId();
+        String image = request == null ? null : request.getImage();
+        String text = safeText(request == null ? null : request.getMessage());
+        ConversationContext context = conversationContextFor(request, role, userId);
 
         if (isResetCommand(text)) {
             sessions.remove(sessionKey(userId, role));
@@ -112,6 +117,52 @@ public class AiChatService {
 
         updateContext(context, text);
         return generateReply(text, role, context);
+    }
+
+    public String getReply(String message, String role, String userId, String image) {
+        AiChatRequest request = new AiChatRequest();
+        request.setMessage(message);
+        request.setRole(role);
+        request.setUserId(userId);
+        request.setImage(image);
+        return getReply(request);
+    }
+
+    public void resetConversation(String userId, String role) {
+        sessions.remove(sessionKey(userId, role));
+    }
+
+    private ConversationContext conversationContextFor(AiChatRequest request, String role, String userId) {
+        List<AiChatRequest.AiChatTurn> history = request == null || request.getHistory() == null
+                ? List.of()
+                : request.getHistory();
+        String key = sessionKey(userId, role);
+
+        if (history.isEmpty()) {
+            return sessions.computeIfAbsent(key, ignored -> new ConversationContext());
+        }
+
+        ConversationContext context = new ConversationContext();
+        int startIndex = Math.max(0, history.size() - 12);
+        for (int index = startIndex; index < history.size(); index += 1) {
+            AiChatRequest.AiChatTurn turn = history.get(index);
+            if (turn == null || !"user".equalsIgnoreCase(safeText(turn.getSender()))) {
+                continue;
+            }
+
+            String text = safeText(turn.getText());
+            if (!text.isBlank()) {
+                updateContext(context, text);
+                context.lastIntent = detectIntent(text, context);
+            }
+
+            if (!safeText(turn.getImage()).isBlank()) {
+                context.lastIntent = Intent.DISEASE_HELP;
+            }
+        }
+
+        sessions.put(key, context);
+        return context;
     }
 
     private String generateReply(String message, String role, ConversationContext context) {
@@ -873,6 +924,10 @@ public class AiChatService {
         String safeUserId = userId == null || userId.isBlank() ? "guest" : userId.trim();
         String safeRole = role == null || role.isBlank() ? "FARMER" : role.trim().toUpperCase(Locale.ROOT);
         return safeUserId + "::" + safeRole;
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private enum Intent {

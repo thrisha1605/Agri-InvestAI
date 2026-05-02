@@ -1,25 +1,54 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
 import joblib
 import numpy as np
+import requests
 import tensorflow as tf
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from PIL import Image
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ARTIFACT_DIR = PROJECT_ROOT / "ai-models" / "artifacts"
+APP_DIR = Path(__file__).resolve().parent
+
+
+def resolve_artifact_dir() -> Path:
+    configured_dir = os.getenv("AI_ARTIFACT_DIR", "").strip()
+    candidates = []
+
+    if configured_dir:
+        candidates.append(Path(configured_dir).expanduser())
+
+    candidates.extend(
+        [
+            APP_DIR.parent / "ai-models" / "artifacts",
+            APP_DIR / "ai-models" / "artifacts",
+            APP_DIR / "artifacts",
+        ]
+    )
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0]
+
+
+ARTIFACT_DIR = resolve_artifact_dir()
 CROP_MODEL_PATH = ARTIFACT_DIR / "crop_model.pkl"
 DISEASE_MODEL_PATH = ARTIFACT_DIR / "disease_model.h5"
 DISEASE_LABELS_PATH = ARTIFACT_DIR / "disease_labels.json"
 IMAGE_SIZE = (224, 224)
 REQUIRED_CROP_FIELDS = ["N", "P", "K", "temperature", "humidity", "rainfall", "ph"]
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip() or "gemini-1.5-flash"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 DISEASE_GUIDANCE = {
     "Tomato___Late_blight": {
@@ -155,6 +184,25 @@ def create_app() -> Flask:
                 "service": "agri-invest-flask-ai",
                 "cropModelReady": CROP_MODEL_PATH.exists(),
                 "diseaseModelReady": DISEASE_MODEL_PATH.exists() and DISEASE_LABELS_PATH.exists(),
+                "geminiReady": bool(GEMINI_API_KEY),
+            }
+        )
+
+    @app.post("/chat")
+    def chat():
+        payload = request.get_json(silent=True) or {}
+
+        try:
+            reply = generate_chat_reply(payload)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 503
+
+        return jsonify(
+            {
+                "reply": reply,
+                "provider": "flask-gemini",
             }
         )
 
@@ -312,8 +360,190 @@ def default_guidance(raw_label: str) -> dict[str, object]:
     }
 
 
+def generate_chat_reply(payload: dict[str, object]) -> str:
+    if not GEMINI_API_KEY:
+        raise RuntimeError("Gemini API key is not configured for the Flask AI service.")
+
+    message = safe_text(payload.get("message"))
+    image = safe_text(payload.get("image"))
+    if not message and not image:
+        raise ValueError("Message or image input is required for chat.")
+
+    try:
+        response = requests.post(
+            GEMINI_API_URL.format(model=normalize_model(GEMINI_MODEL)),
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": GEMINI_API_KEY,
+            },
+            json=build_chat_payload(payload),
+            timeout=90,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Gemini chat request failed: {exc}") from exc
+
+    reply = extract_chat_reply(response.json())
+    if not reply:
+        raise RuntimeError("Gemini returned an empty chat response.")
+    return reply
+
+
+def build_chat_payload(payload: dict[str, object]) -> dict[str, object]:
+    return {
+        "system_instruction": {
+            "parts": [
+                {
+                    "text": build_chat_system_instruction(payload),
+                }
+            ]
+        },
+        "contents": build_chat_contents(payload),
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 900,
+        },
+    }
+
+
+def build_chat_contents(payload: dict[str, object]) -> list[dict[str, object]]:
+    contents: list[dict[str, object]] = []
+    history = payload.get("history")
+
+    if isinstance(history, list):
+        for turn in history[-10:]:
+            if not isinstance(turn, dict):
+                continue
+
+            text = safe_text(turn.get("text"))
+            if not text:
+                continue
+
+            sender = safe_text(turn.get("sender")).lower()
+            contents.append(
+                {
+                    "role": "model" if sender == "ai" else "user",
+                    "parts": [{"text": text}],
+                }
+            )
+
+    parts = build_current_user_parts(payload)
+    if parts:
+        contents.append(
+            {
+                "role": "user",
+                "parts": parts,
+            }
+        )
+
+    return contents
+
+
+def build_current_user_parts(payload: dict[str, object]) -> list[dict[str, object]]:
+    parts: list[dict[str, object]] = []
+    message = safe_text(payload.get("message"))
+    image = safe_text(payload.get("image"))
+
+    if not message and image:
+        message = "Analyze this image and answer the user's request clearly and practically."
+
+    if message:
+        parts.append({"text": message})
+
+    image_part = build_image_part(image)
+    if image_part is not None:
+        parts.append(image_part)
+
+    return parts
+
+
+def build_image_part(image_data: str) -> dict[str, object] | None:
+    if not image_data or "," not in image_data:
+        return None
+
+    metadata, base64_data = image_data.split(",", 1)
+    encoded = safe_text(base64_data)
+    if not encoded:
+        return None
+
+    return {
+        "inlineData": {
+            "mimeType": extract_mime_type(metadata),
+            "data": encoded,
+        }
+    }
+
+
+def extract_chat_reply(payload: dict[str, object]) -> str:
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return ""
+
+    first_candidate = candidates[0]
+    if not isinstance(first_candidate, dict):
+        return ""
+
+    content = first_candidate.get("content")
+    if not isinstance(content, dict):
+        return ""
+
+    parts = content.get("parts")
+    if not isinstance(parts, list):
+        return ""
+
+    reply_parts: list[str] = []
+    for part in parts:
+        if isinstance(part, dict) and part.get("text") is not None:
+            reply_parts.append(str(part.get("text")))
+
+    return "".join(reply_parts).strip()
+
+
+def build_chat_system_instruction(payload: dict[str, object]) -> str:
+    lines = [
+        "You are Agri-Invest AI, a warm real-time assistant inside an Indian agriculture platform.",
+        "Answer naturally like a capable Gemini-style assistant, not like a rigid FAQ bot.",
+        "Handle general questions as well as agriculture, investments, project workflow, ROI, and disease guidance.",
+        "Be practical, clear, and helpful. Use short paragraphs or bullets when useful.",
+        "If details are missing, ask one short follow-up question instead of guessing.",
+        "If the user shares an image, describe visible details carefully and mention uncertainty honestly.",
+    ]
+
+    role = safe_text(payload.get("role")).upper()
+    if role:
+        lines.append(f"Current user role: {role}.")
+
+    user_name = safe_text(payload.get("userName"))
+    if user_name:
+        lines.append(f"Current user name: {user_name}.")
+
+    return "\n".join(lines)
+
+
+def normalize_model(model_name: str) -> str:
+    normalized = safe_text(model_name)
+    if normalized.startswith("models/"):
+        return normalized.removeprefix("models/")
+    return normalized or "gemini-1.5-flash"
+
+
+def extract_mime_type(metadata: str) -> str:
+    lowered = safe_text(metadata).lower()
+    start_index = lowered.find(":")
+    end_index = lowered.find(";")
+    if start_index >= 0 and end_index > start_index:
+        mime_type = lowered[start_index + 1 : end_index].strip()
+        if mime_type:
+            return mime_type
+    return "image/jpeg"
+
+
+def safe_text(value: object) -> str:
+    return "" if value is None else str(value).strip()
+
+
 # CREATE THE APP INSTANCE
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5001")))

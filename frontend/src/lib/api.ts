@@ -7,17 +7,23 @@ function normalizeApiBaseUrl(value: string | undefined) {
 }
 
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
+const USE_DEV_PROXY = import.meta.env.DEV && !API_BASE_URL;
+const DEFAULT_API_TIMEOUT_MS = 10000;
 export const ENABLE_LOCAL_FALLBACKS =
   import.meta.env.DEV && import.meta.env.VITE_ENABLE_LOCAL_FALLBACKS === "true";
 
 export const api = axios.create({
-  baseURL: API_BASE_URL || undefined,
+  baseURL: USE_DEV_PROXY ? undefined : API_BASE_URL || undefined,
+  timeout: DEFAULT_API_TIMEOUT_MS,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-export type ApiRequestConfig = AxiosRequestConfig & { body?: any };
+export type ApiRequestConfig = AxiosRequestConfig & {
+  body?: any;
+  withAuth?: boolean;
+};
 
 export function isBackendSessionToken(token: string | null): token is string {
   if (!token) return false;
@@ -25,6 +31,7 @@ export function isBackendSessionToken(token: string | null): token is string {
   if (
     token.startsWith("admin_token_") ||
     token.startsWith("local_admin_session_") ||
+    token.startsWith("mock_token_") ||
     token.startsWith("token_")
   ) {
     return false;
@@ -34,16 +41,16 @@ export function isBackendSessionToken(token: string | null): token is string {
 
 export async function apiRequest<T = unknown>(config: ApiRequestConfig): Promise<T> {
   try {
-    const requestConfig = { ...config };
-    requestConfig.baseURL = API_BASE_URL || undefined;
+    const { body, withAuth = true, ...requestConfig } = config;
+    requestConfig.baseURL = USE_DEV_PROXY ? undefined : API_BASE_URL || undefined;
+    requestConfig.timeout = requestConfig.timeout ?? DEFAULT_API_TIMEOUT_MS;
 
-    if (requestConfig.body !== undefined && requestConfig.data === undefined) {
-      requestConfig.data = requestConfig.body;
-      delete requestConfig.body;
+    if (body !== undefined && requestConfig.data === undefined) {
+      requestConfig.data = body;
     }
 
-    const token = authService.getToken();
-    if (isBackendSessionToken(token)) {
+    const token = withAuth ? authService.getToken() : null;
+    if (withAuth && isBackendSessionToken(token)) {
       requestConfig.headers = {
         ...(requestConfig.headers || {}),
         Authorization: `Bearer ${token}`,
@@ -61,7 +68,9 @@ export async function apiRequest<T = unknown>(config: ApiRequestConfig): Promise
     const message =
       axiosError.response?.data?.message ||
       (isNetworkFailure
-        ? API_BASE_URL
+        ? USE_DEV_PROXY
+          ? "Unable to reach the local backend API. Start the Spring Boot server on port 8080 or set VITE_API_URL."
+          : API_BASE_URL
           ? "Unable to reach the backend API. Check that the Render backend is deployed, listening on PORT, and allows your frontend origin."
           : "Unable to reach the backend API. Set VITE_API_URL to your deployed backend URL before building the frontend."
         : undefined) ||

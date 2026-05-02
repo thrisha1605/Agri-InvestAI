@@ -1,0 +1,10 @@
+.git
+**/__pycache__/
+**/*.pyc
+flask-api/venv/
+frontend/node_modules/
+backend-springboot/target/
+backend-springboot/.m2/
+backend-springboot/*.log
+backend-springboot/*.out.log
+backend-springboot/*.err.log

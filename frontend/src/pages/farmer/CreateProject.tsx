@@ -579,7 +579,7 @@ Optional Documents:
             finalProjectData.cropInfo?.cropType || '',
             finalProjectData.landDetails?.soilType || '',
             finalProjectData.irrigation?.irrigationMethod || '',
-            Boolean(waterPlan?.needsWaterInvestment) ? 'Water Infrastructure Required' : '',
+            waterPlan?.needsWaterInvestment ? 'Water Infrastructure Required' : '',
             riskLevel,
           ].filter(Boolean),
         } as any,

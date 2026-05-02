@@ -1,51 +1,14 @@
-<<<<<<< HEAD
-# 🌱 Agri-Invest AI Platform
-
-## 🚀 Overview
-Agri-Invest AI is a full stack web application that provides intelligent agriculture investment insights using machine learning. It helps users make data-driven decisions based on input parameters and trained datasets.
-
-## 🛠 Tech Stack
-- Frontend: React (TypeScript)
-- Backend: Spring Boot (Java)
-- AI Module: Python (Flask)
-- Database: MongoDB
-
-## ⚙️ Features
-- User-friendly interface for input data
-- AI-based prediction and recommendation system
-- RESTful API integration
-- Scalable full stack architecture
-
-## 🔄 How It Works
-1. User enters data through the frontend
-2. Backend processes request via Spring Boot
-3. AI module (Flask API) analyzes input using trained model
-4. Results are returned and displayed to the user
-
-## ▶️ Setup Instructions
-1. Clone the repository
-2. Run backend (Spring Boot)
-3. Run frontend (React)
-4. Start Python Flask API
-
-## 📸 Screenshots
-(Add screenshots here)
-
-## 🔗 Live Demo
-(Add link after deployment)
-=======
 # Agri-Invest AI
 
-Production-oriented AI modules for:
+Full-stack agriculture investment platform with:
 
-- crop recommendation
-- crop suitability, yield, profit, and risk analysis
-- image-based disease detection
-- ESG scoring
-- water-gap detection and borewell investment planning
-- Flask + Spring Boot + React integration
+- React frontend
+- Spring Boot backend
+- Flask AI service
+- MongoDB persistence
+- Crop analysis, disease detection, and AI chat
 
-## Structure
+## Project Structure
 
 ```text
 ai-models/
@@ -55,62 +18,48 @@ backend-springboot/
 frontend/
 ```
 
-## Dataset Setup
+## Main Features
 
-Use the real datasets described in [datasets/README.md](datasets/README.md):
+- Crop recommendation using the trained crop model
+- Crop suitability, yield, revenue, profit, ESG, and water-gap analysis
+- Leaf-image disease detection for supported PlantVillage classes
+- Backend-persisted projects, investments, wallets, notifications, and AI outputs
+- Backend-persisted AI chat history
+- One seeded completed demo project available from the backend
 
-- Crop recommendation CSV with `N, P, K, temperature, humidity, ph, rainfall, label`
-- PlantVillage images for Tomato, Potato, and Corn disease classes
+## Run Locally
 
-## Train the AI Models
-
-Install Python dependencies:
+### 1. Flask AI service
 
 ```powershell
 python -m venv .venv-ai
 .\.venv-ai\Scripts\Activate.ps1
-pip install -r ai-models\requirements.txt
+pip install -r flask-api\requirements.txt
+python flask-api\app.py
 ```
 
-Train the crop recommendation model:
+Optional Gemini env vars for Flask chat:
 
 ```powershell
-python ai-models\train_crop_model.py --data datasets\crop-recommendation\Crop_recommendation.csv
+$env:GEMINI_API_KEY="your_key"
+$env:GEMINI_MODEL="gemini-1.5-flash"
 ```
 
-Train the disease detection model:
-
-```powershell
-python ai-models\train_disease_model.py --data datasets\plantvillage
-```
-
-Generated outputs:
-
-- `ai-models/artifacts/crop_model.pkl`
-- `ai-models/artifacts/crop_metrics.json`
-- `ai-models/artifacts/crop_confusion_matrix.png`
-- `ai-models/artifacts/disease_model.h5`
-- `ai-models/artifacts/disease_labels.json`
-- `ai-models/artifacts/disease_metrics.json`
-- `ai-models/artifacts/disease_training_curves.png`
-- `ai-models/artifacts/disease_confusion_matrix.png`
-
-## Run the Services
-
-Start Flask:
-
-```powershell
-.\.venv-ai\Scripts\python.exe flask-api\app.py
-```
-
-Start Spring Boot:
+### 2. Spring Boot backend
 
 ```powershell
 cd backend-springboot
 mvn -s .mvn\settings.xml spring-boot:run
 ```
 
-Start React:
+Important env vars:
+
+```powershell
+$env:MONGODB_URI="mongodb://localhost:27017/agri_invest"
+$env:AI_MODULE_URL="http://127.0.0.1:5001/recommend-crop"
+```
+
+### 3. React frontend
 
 ```powershell
 cd frontend
@@ -118,104 +67,76 @@ npm install
 npm run dev
 ```
 
-## API Endpoints
+## Deploy On Render
 
-Flask:
+This repo now includes a root `render.yaml` Blueprint for:
+
+- `agri-invest-flask`
+- `agri-invest-backend`
+- `agri-invest-frontend`
+
+Secrets are expected in Render environment variables instead of committed files.
+
+### Required secrets
+
+- `MONGODB_URI` for the backend
+- `GEMINI_API_KEY` for the Flask AI service
+- `GEMINI_API_KEY` for the backend chat fallback
+- `VITE_API_URL` for the frontend, set to your backend public URL such as `https://<your-backend>.onrender.com`
+
+Atlas note: include the database name in the URI path, for example:
+
+```text
+mongodb://<user>:<password>@<host-1>:27017,<host-2>:27017,<host-3>:27017/agri_invest?ssl=true&replicaSet=<replica-set>&authSource=admin&appName=<app-name>
+```
+
+### Render deploy flow
+
+1. Push this repo to GitHub.
+2. In Render, create a new Blueprint and point it at this repo.
+3. Enter the prompted secret values for `MONGODB_URI`, both `GEMINI_API_KEY` entries, and `VITE_API_URL`.
+4. After the first deploy, open the frontend URL and verify login, crop analysis, disease detection, and AI chat.
+
+The backend service automatically builds its internal `AI_MODULE_URL` from the Flask service's Render host and port during startup, so you do not need to hardcode that URL in the repo for Render.
+
+## Core API Endpoints
+
+### Flask
 
 - `GET /health`
 - `POST /recommend-crop`
 - `POST /predict-disease`
+- `POST /chat`
 
-Spring Boot proxy + analytics:
+### Spring Boot
 
 - `POST /api/ai/crop`
 - `POST /api/ai/disease`
 - `POST /api/ai/crop-analysis`
 - `POST /api/ai/esg-score`
 - `POST /api/ai/project-insights`
+- `POST /api/ai/chat`
+- `GET /api/ai/chat/history`
+- `DELETE /api/ai/chat/history`
 
-## Postman Checks
+## Demo Data
 
-Crop recommendation through Spring:
+The backend seeds:
 
-```http
-POST http://localhost:8080/api/ai/crop
-Content-Type: application/json
+- demo users for admin, farmer, partner, and investors
+- wallet accounts
+- a completed grape project with id `demo-completed-vineyard-2026`
+- settled investments
+- milestone updates
 
-{
-  "N": 90,
-  "P": 42,
-  "K": 43,
-  "temperature": 25.4,
-  "humidity": 78,
-  "rainfall": 180,
-  "ph": 6.5
-}
+Default seeded password:
+
+```text
+AgriDemo123
 ```
 
-Crop analysis:
+## Notes
 
-```http
-POST http://localhost:8080/api/ai/crop-analysis
-Content-Type: application/json
-
-{
-  "cropType": "RICE",
-  "soilType": "ALLUVIAL",
-  "acres": 3,
-  "temperature": 27,
-  "humidity": 82,
-  "rainfall": 1200,
-  "ph": 6.4,
-  "N": 95,
-  "P": 48,
-  "K": 50
-}
-```
-
-ESG score:
-
-```http
-POST http://localhost:8080/api/ai/esg-score
-Content-Type: application/json
-
-{
-  "waterUsage": 150000,
-  "fertilizerType": "INTEGRATED",
-  "pesticideLevel": "MEDIUM",
-  "renewableEnergy": 30,
-  "workersEmployed": 5,
-  "fairWages": true,
-  "communityBenefit": 70,
-  "documentsUploaded": 6,
-  "transparencyScore": 80,
-  "trustScore": 85
-}
-```
-
-Project insights:
-
-```http
-POST http://localhost:8080/api/ai/project-insights
-Content-Type: application/json
-```
-
-Body: use the same nested `landDetails`, `cropInfo`, `irrigation`, `funding`, and `esg` structure from the farmer project creation flow.
-
-Disease detection through Spring:
-
-- `POST http://localhost:8080/api/ai/disease`
-- Body type: `form-data`
-- Key: `image`
-- Value: upload a Tomato, Potato, or Corn leaf image
-
-## Verified in This Workspace
-
-- React production build: passed
-- Spring Boot Maven compile: passed
-- Python syntax checks: passed for training scripts and Flask API
-
-## Important Note
-
-The training code and serving integration are complete, but the real model artifacts are not committed in this workspace because the Kaggle datasets were not downloaded inside the sandbox. Run the training commands above after placing the datasets locally to generate the `.pkl`, `.h5`, metrics JSON files, and confusion-matrix/training-curve images.
->>>>>>> 2cdd66ba4c3f8593d7d5dc0d419c53450d2314e0
+- The frontend production build is passing in this workspace.
+- The backend compile is passing with `mvn -s .mvn\settings.xml -DskipTests compile`.
+- Model artifacts are expected under `ai-models/artifacts/`.

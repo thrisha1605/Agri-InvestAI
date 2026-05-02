@@ -3,6 +3,7 @@ package com.agriinvest.service;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -14,6 +15,8 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.agriinvest.dto.AiChatRequest;
 
 @Service
 public class AiIntegrationService {
@@ -37,9 +40,34 @@ public class AiIntegrationService {
             pythonPayload.put("humidity", data.get("humidity"));
             pythonPayload.put("rainfall", data.get("rainfall"));
             pythonPayload.put("ph", data.get("ph"));
-            return restTemplate.postForObject(flaskUrl, pythonPayload, Map.class);
+            return toMap(restTemplate.postForObject(flaskUrl, pythonPayload, Map.class));
         } catch (Exception e) {
             throw new RuntimeException("Flask connection failed: " + e.getMessage());
+        }
+    }
+
+    public Optional<String> generateChatReply(AiChatRequest request) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("message", request == null ? null : request.getMessage());
+            payload.put("role", request == null ? null : request.getRole());
+            payload.put("userId", request == null ? null : request.getUserId());
+            payload.put("userName", request == null ? null : request.getUserName());
+            payload.put("image", request == null ? null : request.getImage());
+            payload.put("history", request == null ? null : request.getHistory());
+
+            Map<String, Object> response = toMap(
+                    restTemplate.postForObject(resolveEndpoint("/chat"), payload, Map.class)
+            );
+
+            String reply = textValue(response.get("reply"));
+            if (reply.isBlank()) {
+                reply = textValue(response.get("message"));
+            }
+
+            return reply.isBlank() ? Optional.empty() : Optional.of(reply);
+        } catch (Exception exception) {
+            return Optional.empty();
         }
     }
 
@@ -67,14 +95,28 @@ public class AiIntegrationService {
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("image", new HttpEntity<>(resource));
 
-            String baseUrl = flaskUrl.substring(0, flaskUrl.lastIndexOf("/"));
-            String diseaseUrl = baseUrl + "/predict-disease";
-
-            Map<?, ?> response = restTemplate.postForObject(diseaseUrl, new HttpEntity<>(body, headers), Map.class);
+            Map<?, ?> response = restTemplate.postForObject(
+                    resolveEndpoint("/predict-disease"),
+                    new HttpEntity<>(body, headers),
+                    Map.class
+            );
             return toMap(response);
         } catch (Exception e) {
             throw new RuntimeException("Disease Detection Error: " + e.getMessage());
         }
+    }
+
+    private String resolveEndpoint(String path) {
+        String normalizedPath = path.startsWith("/") ? path : "/" + path;
+        return resolveBaseUrl() + normalizedPath;
+    }
+
+    private String resolveBaseUrl() {
+        int lastSlashIndex = flaskUrl.lastIndexOf('/');
+        if (lastSlashIndex <= "http://".length()) {
+            return flaskUrl;
+        }
+        return flaskUrl.substring(0, lastSlashIndex);
     }
 
     private Map<String, Object> toMap(Map<?, ?> response) {
@@ -82,5 +124,9 @@ public class AiIntegrationService {
         if (response == null) return result;
         response.forEach((key, value) -> result.put(String.valueOf(key), value));
         return result;
+    }
+
+    private String textValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
     }
 }

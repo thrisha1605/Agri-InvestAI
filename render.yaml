@@ -1,0 +1,56 @@
+services:
+  - type: web
+    runtime: docker
+    name: agri-invest-flask
+    dockerfilePath: flask-api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: PORT
+        value: 10000
+
+  - type: web
+    runtime: docker
+    name: agri-invest-backend
+    rootDir: backend-springboot
+    dockerfilePath: Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: RAZORPAY_KEY
+        sync: false
+      - key: RAZORPAY_SECRET
+        sync: false
+      - key: AI_MODULE_HOST
+        fromService:
+          name: agri-invest-flask
+          type: web
+          property: host
+      - key: AI_MODULE_PORT
+        fromService:
+          name: agri-invest-flask
+          type: web
+          property: port
+
+  - type: web
+    runtime: static
+    name: agri-invest-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false
