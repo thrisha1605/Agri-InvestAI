@@ -1,12 +1,9 @@
 flask==3.0.3
 flask-cors==5.0.0
+gunicorn==25.0.0
 joblib==1.4.2
-matplotlib==3.9.2
-numpy==2.1.1
-pandas==2.2.2
+numpy==1.26.4
 pillow==10.4.0
+requests==2.32.3
 scikit-learn==1.5.1
-seaborn==0.13.2
 tensorflow==2.18.0
-requests
-gunicorn
