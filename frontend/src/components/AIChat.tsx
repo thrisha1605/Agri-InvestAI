@@ -1,4 +1,22 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import {
+  ArrowLeft,
+  Bot,
+  Briefcase,
+  Bug,
+  CheckCircle2,
+  Droplets,
+  Image as ImageIcon,
+  Leaf,
+  MessageCircle,
+  RotateCcw,
+  Send,
+  Shield,
+  Sparkles,
+  TrendingUp,
+  Wallet,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authService } from '@/lib/auth';
@@ -9,24 +27,6 @@ import {
   streamFriendlyAssistant,
   type AIChatTurn,
 } from '@/lib/liveChat';
-import {
-  ArrowLeft,
-  Image as ImageIcon,
-  MessageCircle,
-  RotateCcw,
-  Send,
-  Sparkles,
-  X,
-  Leaf,
-  TrendingUp,
-  Wallet,
-  Shield,
-  Bug,
-  Droplets,
-  Briefcase,
-  CheckCircle2,
-  Bot,
-} from 'lucide-react';
 
 interface Message {
   id: string;
@@ -41,7 +41,15 @@ interface QuickPrompt {
   prompt: string;
 }
 
+const GUEST_CHAT_ID_KEY = 'agriinvest_ai_guest_id';
+
 const QUICK_PROMPTS: Record<string, QuickPrompt[]> = {
+  PUBLIC: [
+    { label: 'How it works', prompt: 'Explain how Agri-Invest works in simple words.' },
+    { label: 'ROI basics', prompt: 'Explain ROI like I am a beginner.' },
+    { label: 'Crop help', prompt: 'Suggest a good crop idea for steady market demand.' },
+    { label: 'Ask anything', prompt: 'What can you help me with here?' },
+  ],
   FARMER: [
     { label: 'Suggest crop', prompt: 'Suggest a crop for black soil in Kharif season.' },
     { label: 'Tomato profit', prompt: 'Is tomato farming profitable per acre?' },
@@ -69,6 +77,7 @@ const QUICK_PROMPTS: Record<string, QuickPrompt[]> = {
 };
 
 const ROLE_SUBTITLE: Record<string, string> = {
+  PUBLIC: 'Guest AI Assistant',
   FARMER: 'Friendly AI Assistant',
   INVESTOR: 'Friendly AI Advisor',
   AGRI_PARTNER: 'Friendly AI Assistant',
@@ -76,11 +85,26 @@ const ROLE_SUBTITLE: Record<string, string> = {
 };
 
 const ROLE_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  PUBLIC: Bot,
   FARMER: Leaf,
   INVESTOR: TrendingUp,
   AGRI_PARTNER: Briefcase,
   ADMIN: Shield,
 };
+
+function getOrCreateGuestChatId() {
+  const existingId = window.localStorage.getItem(GUEST_CHAT_ID_KEY);
+  if (existingId) {
+    return existingId;
+  }
+
+  const nextId = window.crypto?.randomUUID
+    ? `guest-${window.crypto.randomUUID()}`
+    : `guest-${Date.now()}`;
+
+  window.localStorage.setItem(GUEST_CHAT_ID_KEY, nextId);
+  return nextId;
+}
 
 function createWelcomeMessage(text: string): Message {
   return {
@@ -104,6 +128,7 @@ function createWelcomeState(text: string) {
 
 export function AIChat() {
   const user = authService.getCurrentUser();
+  const guestChatId = useMemo(() => (user ? null : getOrCreateGuestChatId()), [user]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -115,15 +140,18 @@ export function AIChat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const role = user?.role || 'FARMER';
-  const hasBackendSession = isBackendSessionToken(authService.getToken());
-  const quickPrompts = QUICK_PROMPTS[role] || QUICK_PROMPTS.FARMER;
+  const role = user?.role || 'PUBLIC';
+  const chatUserId = user?.id || guestChatId || null;
+  const hasBackendSession = Boolean(user?.id) && isBackendSessionToken(authService.getToken());
+  const quickPrompts = QUICK_PROMPTS[role] || QUICK_PROMPTS.PUBLIC;
   const RoleIcon = ROLE_ICONS[role] || Bot;
 
   const welcomeMessage = useMemo(() => {
     const name = user?.name || 'there';
 
     const roleText: Record<string, string> = {
+      PUBLIC:
+        `Hi ${name}. I am your Agri-Invest AI assistant. Ask me about farming, investing, project flow, or general questions any time.`,
       FARMER:
         `Hi ${name}. I am your Agri-Invest AI assistant. Ask me about crops, diseases, profits, project flow, or anything else you need help with.`,
       INVESTOR:
@@ -134,23 +162,18 @@ export function AIChat() {
         `Hi ${name}. I am your Agri-Invest AI copilot. I can help with approvals, risk checks, payouts, operations, and general guidance.`,
     };
 
-    return roleText[role] || roleText.FARMER;
+    return roleText[role] || roleText.PUBLIC;
   }, [role, user?.name]);
 
   const storageKey = useMemo(() => {
-    if (!user) {
-      return null;
+    if (!chatUserId) {
+      return `agriinvest_ai_chat_public_${role}`;
     }
 
-    return `agriinvest_ai_chat_${user.id}_${role}`;
-  }, [role, user]);
+    return `agriinvest_ai_chat_${chatUserId}_${role}`;
+  }, [chatUserId, role]);
 
   useEffect(() => {
-    if (!storageKey) {
-      setMessages([]);
-      return;
-    }
-
     const restoreLocalMessages = () => {
       const savedMessages = localStorage.getItem(storageKey);
       if (!savedMessages) {
@@ -214,15 +237,11 @@ export function AIChat() {
   }, [hasBackendSession, role, storageKey, user?.id, welcomeMessage]);
 
   useEffect(() => {
-    if (!storageKey || hasBackendSession) {
-      return;
-    }
-
     const persistableMessages = messages.filter(
       (message) => message.text.trim() || message.sender === 'user' || message.image,
     );
     localStorage.setItem(storageKey, JSON.stringify(persistableMessages));
-  }, [hasBackendSession, messages, storageKey]);
+  }, [messages, storageKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -230,6 +249,16 @@ export function AIChat() {
 
   const getFallbackReply = (question: string): string => {
     const q = question.toLowerCase();
+
+    if (role === 'PUBLIC') {
+      if (q.includes('invest') || q.includes('roi') || q.includes('return')) {
+        return 'I can explain investment returns and project basics in simple words. Ask me about any crop or project type.';
+      }
+      if (q.includes('crop') || q.includes('soil') || q.includes('disease')) {
+        return 'I can help with crop ideas, disease symptoms, soil guidance, and farming basics. Tell me what you are working on.';
+      }
+      return 'Ask me anything about farming, investing, this platform, or general questions.';
+    }
 
     if (role === 'FARMER') {
       if (q.includes('soil')) return 'Sure. Tell me your soil type and crop, and I will keep the advice practical.';
@@ -273,11 +302,9 @@ export function AIChat() {
   };
 
   const resetChat = () => {
-    if (storageKey) {
-      localStorage.removeItem(storageKey);
-    }
-    if (hasBackendSession && user?.id) {
-      void clearAssistantHistory({ role, userId: user.id }).catch(() => undefined);
+    localStorage.removeItem(storageKey);
+    if (chatUserId) {
+      void clearAssistantHistory({ role, userId: chatUserId }).catch(() => undefined);
     }
 
     setMessages(createWelcomeState(welcomeMessage));
@@ -327,7 +354,7 @@ export function AIChat() {
         {
           message: text || 'Analyze this image.',
           role,
-          userId: user?.id || null,
+          userId: chatUserId,
           userName: user?.name || null,
           image: currentImage || null,
           history: historySnapshot.map<AIChatTurn>((item) => ({
@@ -403,18 +430,16 @@ export function AIChat() {
     reader.readAsDataURL(file);
   };
 
-  if (!user) return null;
-
   return (
     <>
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 via-green-600 to-emerald-700 text-white shadow-xl transition-all duration-300 hover:scale-110 hover:shadow-2xl"
+          className="fixed bottom-5 right-5 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 via-green-600 to-emerald-700 text-white shadow-xl transition-all duration-300 hover:scale-110 hover:shadow-2xl sm:bottom-6 sm:right-6 sm:h-14 sm:w-14"
           title="Open AI Assistant"
         >
-          <MessageCircle className="h-6 w-6" />
-          <span className="absolute -right-1 -top-1 h-4 w-4 animate-pulse rounded-full bg-pink-500" />
+          <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6" />
+          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full bg-pink-500 sm:h-4 sm:w-4" />
         </button>
       )}
 
